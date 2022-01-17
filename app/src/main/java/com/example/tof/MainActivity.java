@@ -8,11 +8,15 @@ import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.os.Bundle;
 import android.view.TextureView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.viewpager.widget.ViewPager;
+
+import com.google.android.material.tabs.TabLayout;
 
 /*  This is an example of getting and processing ToF data.
 
@@ -25,23 +29,74 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     public static final int CAM_PERMISSIONS_REQUEST = 0;
 
     private TextureView rawDataView;
+    private TabLayout tabLayoutView;
     private TextureView noiseReductionView;
     private TextureView movingAverageView;
     private TextureView blurredAverageView;
     private Matrix defaultBitmapTransform;
-    private Camera camera;
+    private DepthCamera camera;
+    private TabLayout tabLayout;
 
+    private ViewPager viewPager;
+    private PagerAdapter adapter;
+    private TextView minValueTextView;
+    private TextView maxValueTextView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         rawDataView = findViewById(R.id.rawData);
-        noiseReductionView = findViewById(R.id.noiseReduction);
-        movingAverageView = findViewById(R.id.movingAverage);
-        blurredAverageView = findViewById(R.id.blurredAverage);
+        // get the reference of FrameLayout and TabLayout
+        tabLayout = (TabLayout) findViewById(R.id.simpleTabLayout1);
+// Create a new Tab named "First"
+        TabLayout.Tab firstTab = tabLayout.newTab();
+        firstTab.setText("Statistics"); // set the Text for the first Tab
+        //firstTab.setIcon(R.drawable.); // set an icon for the
+// first tab
+        tabLayout.addTab(firstTab); // add  the tab at in the TabLayout
+// Create a new Tab named "Second"
+        TabLayout.Tab secondTab = tabLayout.newTab();
+        secondTab.setText("Settings"); // set the Text for the second Tab
+        //secondTab.setIcon(R.drawable.ic_launcher); // set an icon for the second tab
+        tabLayout.addTab(secondTab); // add  the tab  in the TabLayout
+// Create a new Tab named "Third"
+        TabLayout.Tab thirdTab = tabLayout.newTab();
+        thirdTab.setText("Operations"); // set the Text for the first Tab
+        //thirdTab.setIcon(R.drawable.ic_launcher); // set an icon for the first tab
+        tabLayout.addTab(thirdTab); // add  the tab at in the TabLayout
+        //TabLayout.BaseOnTabSelectedListener baseOnTabSelectedListener = ;
+        tabLayout.setTabGravity(TabLayout.GRAVITY_FILL);
 
+        viewPager = (ViewPager) findViewById(R.id.pager);
+        adapter = new PagerAdapter
+                (getSupportFragmentManager(), tabLayout.getTabCount());
+        viewPager.setAdapter(adapter);
+        viewPager.addOnPageChangeListener(new TabLayout.TabLayoutOnPageChangeListener(tabLayout));
+
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                viewPager.setCurrentItem(tab.getPosition());
+
+            }
+
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {
+
+            }
+
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {
+
+            }
+        });
+             /*noiseReductionView = findViewById(R.id.noiseReduction);
+        movingAverageView = findViewById(R.id.movingAverage);
+        blurredAverageView = findViewById(R.id.blurredAverage);*/
+        minValueTextView = findViewById(R.id.minValueTextView);
+        maxValueTextView = findViewById(R.id.maxValueTextView);
         checkCamPermissions();
-        camera = new Camera(this, this);
+        camera = new DepthCamera(this, this);
         camera.openFrontDepthCamera();
     }
 
@@ -57,24 +112,17 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
     }
 
     @Override
-    public void onRawDataAvailable(Bitmap bitmap) {
-        renderBitmapToTextureView(bitmap, rawDataView);
+    public void onDepthFrameAvailable(DepthFrame depthFrame) {
+        //
+        renderBitmapToTextureView(depthFrame.frameImage, rawDataView);
+        adapter.getStatisticsFragment().setMinValText("" + depthFrame.minDepthValue);
+        adapter.getStatisticsFragment().setMaxValText("" + depthFrame.maxDepthValue);
+        adapter.getStatisticsFragment().setAvgValText("" + depthFrame.avgDepthValue);
+        //minValueTextView.setText("" + depthFrame.minDepthValue);
+        //maxValueTextView.setText("" + depthFrame.maxDepthValue);
+
     }
 
-    @Override
-    public void onNoiseReductionAvailable(Bitmap bitmap) {
-        renderBitmapToTextureView(bitmap, noiseReductionView);
-    }
-
-    @Override
-    public void onMovingAverageAvailable(Bitmap bitmap) {
-        renderBitmapToTextureView(bitmap, movingAverageView);
-    }
-
-    @Override
-    public void onBlurredMovingAverageAvailable(Bitmap bitmap) {
-        renderBitmapToTextureView(bitmap, blurredAverageView);
-    }
 
     /* We don't want a direct camera preview since we want to get the frames of data directly
         from the camera and process.
@@ -100,11 +148,41 @@ public class MainActivity extends AppCompatActivity implements DepthFrameVisuali
             RectF bufferRect = new RectF(0, 0, bufferWidth, bufferHeight);
             RectF viewRect = new RectF(0, 0, view.getWidth(), view.getHeight());
             matrix.setRectToRect(bufferRect, viewRect, Matrix.ScaleToFit.CENTER);
-            matrix.postRotate(270, centerX, centerY);
+            matrix.postRotate(90, centerX, centerY);
 
             defaultBitmapTransform = matrix;
         }
         return defaultBitmapTransform;
+    }
+
+    @Override
+    public boolean isStaticRange() {
+        return adapter.getSettingsFragment().isStaticRange();
+    }
+
+    @Override
+    public int getRangeMin() {
+        return adapter.getSettingsFragment().getRangeMin();
+    }
+
+    @Override
+    public int getRangeMax() {
+        return adapter.getSettingsFragment().getRangeMax();
+    }
+
+    @Override
+    public int getDepthMask() {
+        return adapter.getSettingsFragment().getDepthMask();
+    }
+
+    @Override
+    public boolean isLogScale() {
+        return adapter.getSettingsFragment().isLogScale();
+    }
+
+    @Override
+    public boolean showbadArea() {
+        return adapter.getSettingsFragment().showbadArea();
     }
 }
 

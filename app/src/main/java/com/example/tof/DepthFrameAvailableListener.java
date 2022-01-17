@@ -12,15 +12,19 @@ import java.nio.ShortBuffer;
 public class DepthFrameAvailableListener implements ImageReader.OnImageAvailableListener {
     private static final String TAG = DepthFrameAvailableListener.class.getSimpleName();
 
-    public static int WIDTH = 240;
-    public static int HEIGHT = 180;
+    public static int WIDTH = 320;
+    public static int HEIGHT = 240;
+    public static int SIZE = WIDTH * HEIGHT;
 
-    private static float RANGE_MIN = 200.0f;
-    private static float RANGE_MAX = 1600.0f;
+    private static float RANGE_MIN = 10.0f;//200.0f;
+    private static float RANGE_MAX = 500.0f;//1600.0f;
     private static float CONFIDENCE_FILTER = 0.1f;
 
     private DepthFrameVisualizer depthFrameVisualizer;
     private int[] rawMask;
+    private byte[] badAreaMask;
+    private DepthFrame depthFrame;
+
     private int[] noiseReduceMask;
     private int[] averagedMask;
     private int[] averagedMaskP2;
@@ -30,11 +34,13 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         this.depthFrameVisualizer = depthFrameVisualizer;
 
         int size = WIDTH * HEIGHT;
-        rawMask = new int[size];
-        noiseReduceMask = new int[size];
-        averagedMask = new int[size];
-        averagedMaskP2 = new int[size];
-        blurredAverage = new int[size];
+        rawMask = new int[SIZE];
+        //noiseReduceMask = new int[SIZE];
+       // averagedMask = new int[SIZE];
+        //averagedMaskP2 = new int[SIZE];
+        //blurredAverage = new int[SIZE];
+       // badAreaMask = new byte[SIZE];
+        depthFrame = new DepthFrame();
     }
 
     @Override
@@ -42,11 +48,8 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         try {
             Image image = reader.acquireNextImage();
             if (image != null && image.getFormat() == ImageFormat.DEPTH16) {
-                processImage(image);
-                publishRawData();
-                publishNoiseReduction();
-                publishMovingAverage();
-                publishBlurredMovingAverage();
+                processFrame(image);
+                publishFrame();
             }
             image.close();
         }
@@ -55,15 +58,16 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
         }
     }
 
-    private void publishRawData() {
+    private void publishFrame() {
         if (depthFrameVisualizer != null) {
             Bitmap bitmap = convertToRGBBitmap(rawMask);
-            depthFrameVisualizer.onRawDataAvailable(bitmap);
+            depthFrame.frameImage = bitmap;
+            depthFrameVisualizer.onDepthFrameAvailable(depthFrame);
             bitmap.recycle();
         }
     }
 
-    private void publishNoiseReduction() {
+    /*private void publishNoiseReduction() {
         if (depthFrameVisualizer != null) {
             Bitmap bitmap = convertToRGBBitmap(noiseReduceMask);
             depthFrameVisualizer.onNoiseReductionAvailable(bitmap);
@@ -85,56 +89,111 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
             depthFrameVisualizer.onBlurredMovingAverageAvailable(bitmap);
             bitmap.recycle();
         }
-    }
+    }*/
 
-    private void processImage(Image image) {
+    private void processFrame(Image image) {
         ShortBuffer shortDepthBuffer = image.getPlanes()[0].getBuffer().asShortBuffer();
         int[] mask = new int[WIDTH * HEIGHT];
         int[] noiseReducedMask = new int[WIDTH * HEIGHT];
+        depthFrame.rawData = new short[SIZE];
+        int depthMask = depthFrameVisualizer.getDepthMask();
+        if (depthMask == 0) {
+            depthMask = 0xFFFF;
+        }
+        depthFrame.maxDepthValue = 0;
+        depthFrame.minDepthValue = 8191;
+        depthFrame.sumDepthValue = 0L;
+        int pixelCount = 0;
         for (int y = 0; y < HEIGHT; y++) {
             for (int x = 0; x < WIDTH; x++) {
                 int index = y * WIDTH + x;
-                short depthSample = shortDepthBuffer.get(index);
-                int newValue = extractRange(depthSample, CONFIDENCE_FILTER);
-                // Store value in the rawMask for visualization
-                rawMask[index] = newValue;
-
-                int p1Value = averagedMask[index];
-                int p2Value = averagedMaskP2[index];
-                int avgValue = (newValue + p1Value + p2Value) / 3;
-                if (p1Value < 0 || p2Value < 0 || newValue < 0) {
-                    Log.d("TAG", "WHAT");
+                short depthSource = shortDepthBuffer.get(index);
+                short depthSample = (short) ((depthSource & depthMask));
+                byte depthConfidence = (byte) ((depthSource >> 13) & 0x7);
+                depthFrame.rawData[index] = depthSample;
+                float depthPercentage = depthConfidence == 0 ? 1.f : (depthConfidence - 1) / 7.f;
+                if (depthPercentage > CONFIDENCE_FILTER) {
+                    if (depthSample > depthFrame.maxDepthValue)
+                        depthFrame.maxDepthValue = depthSample;
+                    if (depthSample < depthFrame.minDepthValue)
+                        depthFrame.minDepthValue = depthSample;
+                    depthFrame.sumDepthValue += depthSample;
+                    badAreaMask[index] = 0;
+                    pixelCount++;
+                } else {
+                    badAreaMask[index] = depthConfidence;
                 }
+                //int newValue = extractRange(depthSample, CONFIDENCE_FILTER);
+                // Store value in the rawMask for visualization
+                //rawMask[index] = newValue;
+
+                //int p1Value = averagedMask[index];
+                //int p2Value = averagedMaskP2[index];
+                //int avgValue = (newValue + p1Value + p2Value) / 3;
+                //if (p1Value < 0 || p2Value < 0 || newValue < 0) {
+                //    Log.d("TAG", "WHAT");
+                //}
                 // Store the new moving average temporarily
-                mask[index] = avgValue;
+                //mask[index] = avgValue;
             }
         }
+        depthFrame.avgDepthValue = pixelCount > 0 ? (short) (depthFrame.sumDepthValue / pixelCount) : 0;
+        int rangeMin = depthFrame.minDepthValue;
+        int rangeMax = depthFrame.maxDepthValue;
+        boolean isStaticRange = depthFrameVisualizer.isStaticRange();
+        if (depthFrameVisualizer.isStaticRange()) {
+            rangeMin = depthFrameVisualizer.getRangeMin();
+            rangeMax = depthFrameVisualizer.getRangeMax();
+        }
+        boolean isLogScale = depthFrameVisualizer.isLogScale();
+
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                int index = y * WIDTH + x;
+                float normalized = (float)depthFrame.rawData[index];
+                normalized = Math.max(rangeMin, normalized);
+                normalized = Math.min(rangeMax, normalized);
+                normalized = normalized - rangeMin;
+                if (isLogScale) {
+                    normalized = (float) (255.0 * Math.log(1+ normalized)/Math.log(rangeMax));
+
+                } else {
+                    normalized = (float) (255.0 * normalized / (rangeMax - rangeMin));
+                }
+                //int newValue = extractRange(depthFrame.rawData[index], CONFIDENCE_FILTER);
+                rawMask[index] = (int)normalized;
+                //if (rawMask[index] < 0) rawMask[index] = 0;
+                //if (rawMask[index] > 0) rawMask[index] = 0;
+            }
+        }
+
         // Produce a noise reduced version of the raw mask for visualization
-        System.arraycopy(rawMask, 0, noiseReducedMask, 0, rawMask.length);
-        noiseReduceMask = FastBlur.boxBlur(noiseReducedMask, WIDTH, HEIGHT, 1);
+        //System.arraycopy(rawMask, 0, noiseReducedMask, 0, rawMask.length);
+        //noiseReduceMask = FastBlur.boxBlur(noiseReducedMask, WIDTH, HEIGHT, 1);
 
         // Remember the last two frames for moving average
-        averagedMaskP2 = averagedMask;
-        averagedMask = mask;
+        //averagedMaskP2 = averagedMask;
+        //averagedMask = mask;
 
         // Produce a blurred version of the latest moving average result
-        System.arraycopy(averagedMask, 0, blurredAverage, 0, averagedMask.length);
-        blurredAverage = FastBlur.boxBlur(blurredAverage, WIDTH, HEIGHT, 1);
+        //System.arraycopy(averagedMask, 0, blurredAverage, 0, averagedMask.length);
+        //blurredAverage = FastBlur.boxBlur(blurredAverage, WIDTH, HEIGHT, 1);
     }
 
     private int extractRange(short sample, float confidenceFilter) {
-        int depthRange = (short) (sample & 0x1FFF);
-        int depthConfidence = (short) ((sample >> 13) & 0x7);
+        int depthRange = sample; //(short) (sample & 0x1FFF);
+        return normalizeRange(depthRange);
+        /*int depthConfidence = (short) ((sample >> 13) & 0x7);
         float depthPercentage = depthConfidence == 0 ? 1.f : (depthConfidence - 1) / 7.f;
         if (depthPercentage > confidenceFilter) {
             return normalizeRange(depthRange);
         } else {
             return 0;
-        }
+        }*/
     }
 
     private int normalizeRange(int range) {
-        float normalized = (float)range - RANGE_MIN;
+        float normalized = (float)range; // - RANGE_MIN;
         // Clamp to min/max
         normalized = Math.max(RANGE_MIN, normalized);
         normalized = Math.min(RANGE_MAX, normalized);
@@ -146,10 +205,15 @@ public class DepthFrameAvailableListener implements ImageReader.OnImageAvailable
 
     private Bitmap convertToRGBBitmap(int[] mask) {
         Bitmap bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_4444);
+        boolean showBadArea = depthFrameVisualizer.showbadArea();
         for (int y = 0; y < HEIGHT; y++) {
             for (int x = 0; x < WIDTH; x++) {
                 int index = y * WIDTH + x;
-                bitmap.setPixel(x, y, Color.argb(255, 0, mask[index],0));
+                if(!showBadArea || badAreaMask[index] == 0) {
+                    bitmap.setPixel(x, y, Color.argb(255, mask[index], mask[index], mask[index]));
+                } else {
+                    bitmap.setPixel(x, y, Color.argb(255, 255, 0, 0));
+                }
             }
         }
         return bitmap;

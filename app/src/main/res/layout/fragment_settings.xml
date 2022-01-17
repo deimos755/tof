@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsFragment">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <CheckBox
+            android:id="@+id/showBadAreaCheckBox"
+            android:layout_width="150dp"
+            android:layout_height="29dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="244dp"
+            android:checked="true"
+            android:text="Show bad area"
+            android:textSize="14sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/textView2"
+            android:layout_width="91dp"
+            android:layout_height="21dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="40dp"
+            android:text="Range Max"
+            android:textSize="14sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/staticRangeCheckBox" />
+
+        <EditText
+            android:id="@+id/rangeMaxTextNumber"
+            android:layout_width="81dp"
+            android:layout_height="38dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="32dp"
+            android:ems="10"
+            android:inputType="number"
+            android:text="1600"
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+            android:textSize="10sp"
+            android:visibility="visible"
+            app:layout_constraintStart_toEndOf="@+id/textView2"
+            app:layout_constraintTop_toBottomOf="@+id/staticRangeCheckBox"
+            tools:text="1600" />
+
+        <CheckBox
+            android:id="@+id/staticRangeCheckBox"
+            android:layout_width="150dp"
+            android:layout_height="29dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:checked="true"
+            android:text="Static Range"
+            android:textSize="14sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <EditText
+            android:id="@+id/rangeMinTextNumber"
+            android:layout_width="82dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:ems="10"
+            android:inputType="number"
+            android:text="200"
+            android:textAlignment="viewStart"
+            android:textSize="10sp"
+            app:layout_constraintStart_toEndOf="@+id/textView"
+            app:layout_constraintTop_toBottomOf="@+id/staticRangeCheckBox"
+            tools:text="200" />
+
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="91dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="12dp"
+            android:text="Range Min"
+            android:textSize="14sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/staticRangeCheckBox" />
+
+        <RadioGroup
+            android:id="@+id/radioGroup1"
+            android:layout_width="133dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="116dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <RadioButton
+                android:id="@+id/lineraRadioButton"
+                android:layout_width="136dp"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="Linear Scale"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/logRadioButton"
+                android:layout_width="136dp"
+                android:layout_height="wrap_content"
+                android:text="Log Scale"
+                android:textSize="14sp" />
+        </RadioGroup>
+
+        <EditText
+            android:id="@+id/depthMaskTextNumber"
+            android:layout_width="88dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="16dp"
+            android:ems="10"
+            android:inputType="number"
+            android:text="8191"
+            android:textSize="14sp"
+            app:layout_constraintStart_toEndOf="@+id/textView4"
+            app:layout_constraintTop_toBottomOf="@+id/radioGroup1"
+            tools:text="8191" />
+
+        <TextView
+            android:id="@+id/textView4"
+            android:layout_width="77dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="16dp"
+            android:text="Depth Mask"
+            android:textSize="14sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/radioGroup1" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>

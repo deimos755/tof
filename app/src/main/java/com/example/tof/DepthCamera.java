@@ -14,6 +14,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.media.ImageReader;
 import android.util.Log;
 import android.util.Range;
+import android.util.Size;
 import android.util.SizeF;
 import android.view.Surface;
 
@@ -23,10 +24,10 @@ import java.util.List;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 
-public class Camera extends CameraDevice.StateCallback {
-    private static final String TAG = Camera.class.getSimpleName();
+public class DepthCamera extends CameraDevice.StateCallback {
+    private static final String TAG = DepthCamera.class.getSimpleName();
 
-    private static int FPS_MIN = 15;
+    private static int FPS_MIN = 5;//
     private static int FPS_MAX = 30;
 
     private Context context;
@@ -34,20 +35,23 @@ public class Camera extends CameraDevice.StateCallback {
     private ImageReader previewReader;
     private CaptureRequest.Builder previewBuilder;
     private DepthFrameAvailableListener imageAvailableListener;
+    private String cameraID;
+    private boolean isPrivewCapture = true;
+    private CameraCaptureSession captureSession;
 
-    public Camera(Context context, DepthFrameVisualizer depthFrameVisualizer) {
+    public DepthCamera(Context context, DepthFrameVisualizer depthFrameVisualizer) {
         this.context = context;
         cameraManager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
         imageAvailableListener = new DepthFrameAvailableListener(depthFrameVisualizer);
         previewReader = ImageReader.newInstance(DepthFrameAvailableListener.WIDTH,
                 DepthFrameAvailableListener.HEIGHT, ImageFormat.DEPTH16,2);
         previewReader.setOnImageAvailableListener(imageAvailableListener, null);
+        cameraID = getFrontDepthCameraID();
     }
 
     // Open the front depth camera and start sending frames
     public void openFrontDepthCamera() {
-        final String cameraId = getFrontDepthCameraID();
-        openCamera(cameraId);
+        openCamera(cameraID);
     }
 
     private String getFrontDepthCameraID() {
@@ -61,19 +65,21 @@ public class Camera extends CameraDevice.StateCallback {
                     boolean capable = capability == CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT;
                     depthCapable = depthCapable || capable;
                 }
-                if (depthCapable && facingFront) {
-                    // Note that the sensor size is much larger than the available capture size
-                    SizeF sensorSize = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-                    Log.i(TAG, "Sensor size: " + sensorSize);
+                SizeF sensorSize = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);  //SENSOR_INFO_PHYSICAL_SIZE
+                Size sensor = chars.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+                Log.i(TAG, "Sensor size: " + sensorSize + " for camera " + camera + ", facing Front " +
+                        facingFront + ", Pixel size " + sensor);
 
-                    // Since sensor size doesn't actually match capture size and because it is
-                    // reporting an extremely wide aspect ratio, this FoV is bogus
-                    float[] focalLengths = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                    if (focalLengths.length > 0) {
-                        float focalLength = focalLengths[0];
-                        double fov = 2 * Math.atan(sensorSize.getWidth() / (2 * focalLength));
-                        Log.i(TAG, "Calculated FoV: " + fov);
-                    }
+                // Since sensor size doesn't actually match capture size and because it is
+                // reporting an extremely wide aspect ratio, this FoV is bogus
+                float[] focalLengths = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                if (focalLengths.length > 0) {
+                    float focalLength = focalLengths[0];
+                    double fov = 2 * Math.atan(sensorSize.getWidth() / (2 * focalLength));
+                    Log.i(TAG, "Calculated FoV: " + fov + " focalLength " + focalLength);
+                }
+                if (depthCapable /*&& facingFront*/) {
+                    // Note that the sensor size is much larger than the available capture size
                     return camera;
                 }
             }
@@ -85,6 +91,7 @@ public class Camera extends CameraDevice.StateCallback {
     }
 
     private void openCamera(String cameraId) {
+        Log.i(TAG,"Opening Camera " + cameraId);
         try{
             int permission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA);
             if(PackageManager.PERMISSION_GRANTED == permission) {
@@ -128,6 +135,7 @@ public class Camera extends CameraDevice.StateCallback {
 
     private void onCaptureSessionConfigured(@NonNull CameraCaptureSession session) {
         Log.i(TAG,"Capture Session created");
+        captureSession = session;
         previewBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
         try {
             session.setRepeatingRequest(previewBuilder.build(), null, null);
